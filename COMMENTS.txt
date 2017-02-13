@@ -3,16 +3,19 @@ I chose to require the support of a Mysql server because of the size of the inpu
 
 Since the creation of a mysql user requires root privledges, I chose to create setup.sh and setup.sql to seperate the root
 credentials from the main executable.  I create the database and tables in these as well, because it was convenient. The final
-steps dropping the temporary user and database were seperated to their own scripts for the same reason.
+steps dropping the temporary user and database were seperated to their own scripts for the same reason. I make exec calls on
+these scripts from the main executable.  I can do this since it is a standalone installation.  In web applications, exec calls
+can represent a security risk and are to be avoided if at all possible.
+
+Since the number of target zipcodes was short, I chose to store them in an array within the executable.
 
 I chose to only store records in the database tables that would be used to determine the stated requirement to optimize the
 execution time.  Removing the extra records dropped execution time by 75%.  Future enhancements may require additional
 records to be stored and slow execution time.
 
-While I am comfortable with JOIN queries, I could not determine a straighforward technique that would eliminate the issue of
-duplicate state - rate_area tuples in the zips table.  Due to the small number of target zipcodes, the use of nested queries
-did not result in unacceptable response time (< 1 second on a shared linux server).  This approach will have scalability
-limitations, but appeared adequate for the problem as stated.
+The limited size of the two resulting database tables made using a JOIN query practical.  This approach will not scale well
+to large target zipcode sets that will lead to large database tables.  JOIN statements will eventually prove to be too slow as
+the target set grows.  This can be overcome by breaking the JOIN query into a nested set of queries on single tables.
 
 Because the zips and plans data were provided by a trusted source, I did not include specific input validation.  If this
 application were made available to un-trusted source data, input validation would need to be added.

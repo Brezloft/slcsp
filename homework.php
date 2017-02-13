@@ -1,8 +1,9 @@
 <?php
+exec('./setup.sh');
+
 $zipsFileName = "zips.csv";
 $plansFileName = "plans.csv";
 $targetFileName = "slcsp.csv";
-$tmpFileName = "tmp.csv";
 
 $host = "localhost";
 $user = "adhocTmpUser";
@@ -25,7 +26,7 @@ $zipsFile = fopen($zipsFileName, "r")  or die ("Unable to open " . $zipsFileName
 $line = fgets($zipsFile);
 
 // records of interest
-$zipArr = file("slcsp.csv");
+$zipArr = file($targetFileName);
 
 $zipsFile = fopen($zipsFileName, "r") or die ("Unable to open zips.csv");
 while(!feof($zipsFile)) {
@@ -69,67 +70,45 @@ while(!feof($plansFile)) {
 fclose($plansFile);
 $stmt->close();
 
-$tmpFile = fopen($tmpFileName, "w");
-fwrite($tmpFile, $zipArr[0]);
+$targetFile = fopen($targetFileName, "w");
+fwrite($targetFile, $zipArr[0]);
 
 for($i = 1; $i < count($zipArr); $i++) {
     $targetZip = rtrim($zipArr[$i]);
     $targetZip = substr($targetZip, 0, -1);
-    $query = "SELECT DISTINCT state, rate_area FROM " . $zipsTable . " WHERE zipcode =  " . $targetZip;
-    $rateArr = [];
-    $rate_area_arr = [];
-
+    $query = "SELECT DISTINCT p.rate, p.rate_area, p.state FROM plans p JOIN zips z ON (z.state= p.state AND z.rate_area = p.rate_area) WHERE z.zipcode = " . $targetZip. " ORDER BY rate";
     if ($result = $mysqli->query($query)) {
+        $j = 0;
+        $rate = -1;
         while ($row = $result->fetch_row()) {
-            // Assumes zip codes do not cross state lines
-            $state = $row[0];
-            array_push($rate_area_arr,$row[1]);       
-	}
-        // if no rate_areas of interest, write output and continue
-        if(count($rate_area_arr) == 0) {
-            writeEntry($targetZip, $rateArr, $tmpFile);
-        } else {
-            foreach($rate_area_arr as $rate_area) {
-
-                $query = "SELECT rate FROM " . $plansTable . " WHERE state = '" . $state . "' AND rate_area = " . $rate_area;
-                if ($result = $mysqli->query($query)) {
-                    while ($row = $result->fetch_row()) {
-                        // mysqli returns all data types as strings
-                        $rateFloat = (float)$row[0];
-                        // float casting can be a little off
-                        $usableRate = round($rateFloat, 2);
-                        array_push($rateArr, $usableRate);
-                    }
-                }
+            $j++;
+            if ($j == 1) {
+                $j++;
             }
-            writeEntry($targetZip, $rateArr, $tmpFile);
+            if($j == 2) {
+               // mysqli returns all data types as strings
+               $rateFloat = (float)$row[0];
+               // float casting can be a little off
+               $rate = round($rateFloat, 2);
+            }
         }
+        writeEntry($targetZip, $rate, $targetFile);
+    } else {
+        echo "Join query failed: (" . $stmt->errno . ") " . $stmt->error;
     }
 }
-fclose($tmpFile);
-copy($tmpFileName,$targetFileName);
+fclose($targetFile);
 
-// Cleanup
-unlink($tmpFileName);
-$query = "DROP TABLE " . $plansTable;
-$result = $mysqli->query($query);
-$query = "DROP TABLE " . $zipsTable;
-$result = $mysqli->query($query);
+exec('./cleanup.sh');
 exit();
 
-function writeEntry($targetZip, $rateArr, $tmpFile) {
-    $inputStr = "" . $targetZip;
-    if(count($rateArr) > 1) {
-        sort($rateArr);
-        $inputStr .= "," . $rateArr[1];   
-    }
-    $inputStr .= "\n";
-    fwrite($tmpFile, $inputStr);
-}
 
-function microtime_float()
-{
-    list($usec, $sec) = explode(" ", microtime());
-    return ((float)$usec + (float)$sec);
+function writeEntry($targetZip, $rate, $tmpFile) {
+    $outputStr = "" . $targetZip;
+    if ($rate > 0) {
+        $outputStr .= "," . $rate;
+    }
+    $outputStr .= "\n";
+    fwrite($tmpFile, $outputStr);
 }
 ?>
